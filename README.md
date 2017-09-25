@@ -16,7 +16,13 @@ Gym StarCraft is an environment bundle for OpenAI Gym. It is based on [Facebook'
 
 2. Install [TorchCraft](https://github.com/TorchCraft/TorchCraft) and its dependencies. You can skip the torch client part. 
 
-3. Install the package itself:
+3. install /TorchCraft/py.
+    ```
+    cd /torchcraft/py
+    pip install -e .
+    ```
+
+4. Install the package itself:
     ```
     git clone https://github.com/Kyle1993/gym-starcraft-modified.git
     cd gym-starcraft-modified
