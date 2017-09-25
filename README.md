@@ -1,7 +1,8 @@
 # Modification
 It has been adapted to [Torchcraft v 1.3.0](https://github.com/TorchCraft/TorchCraft/releases) and [BWAPI v 4.1.2](https://github.com/bwapi/bwapi/releases).   
 It doesn't need torchcraft-py anymore because [Torchcraft v 1.3.0](https://github.com/TorchCraft/TorchCraft/releases) supports python API.   
-Wrap an easy_env for multi_units battle  
+Support python3  
+Wrap an easy_env for multi_units battle and add to maps  
 
 reference:  
 [alibaba/gym-starcraf](https://github.com/alibaba/gym-starcraft)  
