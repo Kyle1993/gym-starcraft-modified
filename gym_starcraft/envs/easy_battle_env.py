@@ -6,10 +6,9 @@ import gym_starcraft.utils as utils
 import gym_starcraft.envs.starcraft_env as sc
 
 DISTANCE_FACTOR = 16
-MYSELF_NUM = 5
-ENEMY_NUM = 5
+# MYSELF_NUM = 5
+# ENEMY_NUM = 5
 ACTION_NUM = 3
-DISTANCE_FACTOR = 25
 
 class Unit_State(object):
     def __init__(self, unit, id):
@@ -37,11 +36,14 @@ class Unit_State(object):
 
 
 class EasyBattleEnv(sc.StarCraftEnv):
-    def __init__(self, server_ip, server_port, speed=0, frame_skip=0,
+    def __init__(self, server_ip, server_port, myself_num, enemy_num, speed=0, frame_skip=0,
                  self_play=False, max_episode_steps=2000):
         super(EasyBattleEnv, self).__init__(server_ip, server_port, speed,
                                               frame_skip, self_play,
                                               max_episode_steps)
+
+        self.MYSELF_NUM = myself_num
+        self.ENMEY_NUM = enemy_num
 
         self.current_state = None  # current_state['myself']: units state of myself; current_state['enemy']:units of enemy
 
@@ -68,9 +70,11 @@ class EasyBattleEnv(sc.StarCraftEnv):
 
     # needs to be modified
     def _observation_space(self):
-        obs_low = [0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        obs_high = [100.0, 100.0, 1.0, 1.0, 1.0, 50.0, 100.0, 100.0, 1.0, 1.0]
-        return spaces.Box(np.array(obs_low), np.array(obs_high))
+        # obs_low = [0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        # obs_high = [100.0, 100.0, 1.0, 1.0, 1.0, 50.0, 100.0, 100.0, 1.0, 1.0]
+        # return spaces.Box(np.array(obs_low), np.array(obs_high))
+        print('return the current_state, have no space, you can extract the state you want')
+        return spaces.Box(np.array([1.]),np.array([1.]))
 
     def _make_commands(self, actions):
         cmds = []
@@ -78,10 +82,10 @@ class EasyBattleEnv(sc.StarCraftEnv):
             return cmds
 
         # print(actions)
-        assert (len(actions) == MYSELF_NUM)
+        assert (len(actions) == self.MYSELF_NUM)
         assert (len(actions[0]) == ACTION_NUM)
 
-        for uid in range(MYSELF_NUM):
+        for uid in range(self.MYSELF_NUM):
             unit = self.current_state['myself'][uid]
 
             if unit is not None:   # if not die
@@ -107,7 +111,7 @@ class EasyBattleEnv(sc.StarCraftEnv):
 
     def _make_observation(self):
 
-        self.update_self()         # mainly in self.current_state, which is main state, we can extrct all info from it
+        self.update_self()         # mainly in self.current_state, which is main state, we can extract all info from it
         obs = self._compute_obs()  # return the obs you want
 
         # self.print_attr()
@@ -115,6 +119,7 @@ class EasyBattleEnv(sc.StarCraftEnv):
         return obs
 
     # return the obs you want, compute by self.current_state
+    # but in order to make the env stable, it is recommanded to compute in you own code
     def _compute_obs(self):
         return self.current_state
 
@@ -129,7 +134,7 @@ class EasyBattleEnv(sc.StarCraftEnv):
     
     def reset_data(self):
         # skip the init state, there is no unit at the beginning of game
-        while len(self.state.units) == 0 or len(self.state.units[0]) != MYSELF_NUM or len(self.state.units[1]) != ENEMY_NUM:
+        while len(self.state.units) == 0 or len(self.state.units[0]) != self.MYSELF_NUM or len(self.state.units[1]) != self.ENEMY_NUM:
             self.client.send([])
             self.state = self.client.recv()
 
@@ -193,15 +198,15 @@ class EasyBattleEnv(sc.StarCraftEnv):
         if self.myself_unit_dict is None:
             self.myself_unit_dict = {}
             self.current_state['myself'] = [] 
-            self.myself_alive_list = [1 for _ in range(MYSELF_NUM)]
+            self.myself_alive_list = [1 for _ in range(self.MYSELF_NUM)]
             for unit_index,unit in enumerate(self.state.units[0]):
                 self.myself_unit_dict[unit.id]= unit_index
                 self.current_state['myself'].append(Unit_State(unit,unit.id))
                 self.myself_current_hp += unit.health
         # current_state is not init_state
         else:
-            self.myself_alive_list = [0 for _ in range(MYSELF_NUM)]
-            self.current_state['myself'] = [None for _ in range(MYSELF_NUM)]
+            self.myself_alive_list = [0 for _ in range(self.MYSELF_NUM)]
+            self.current_state['myself'] = [None for _ in range(self.MYSELF_NUM)]
             for unit in self.state.units[0]:
                 uid = self.myself_unit_dict[unit.id]
                 self.current_state['myself'][uid] = Unit_State(unit,unit.id)
@@ -213,15 +218,15 @@ class EasyBattleEnv(sc.StarCraftEnv):
         if self.enemy_unit_dict is None:
             self.enemy_unit_dict = {}
             self.current_state['enemy'] = []
-            self.enemy_alive_list = [1 for _ in range(ENEMY_NUM)]
+            self.enemy_alive_list = [1 for _ in range(self.ENEMY_NUM)]
             for unit_index,unit in enumerate(self.state.units[1]):
                 self.enemy_unit_dict[unit.id]= unit_index
                 self.current_state['enemy'].append(Unit_State(unit,unit.id))
                 self.enemy_current_hp += unit.health
         # current_state is not init_state
         else:
-            self.enemy_alive_list = [0 for _ in range(ENEMY_NUM)]
-            self.current_state['enemy'] = [None for _ in range(ENEMY_NUM)]
+            self.enemy_alive_list = [0 for _ in range(self.ENEMY_NUM)]
+            self.current_state['enemy'] = [None for _ in range(self.ENEMY_NUM)]
             for unit in self.state.units[1]:
                 uid = self.enemy_unit_dict[unit.id]
                 self.current_state['enemy'][uid] = Unit_State(unit,unit.id)
