@@ -90,7 +90,7 @@ class StarCraftEnv(gym.Env):
         # skip the init state, there is no unit at the beginning of
         # self.client.send(self._make_commands(None))
         # self.state = self.client.recv()
-        print(len(self.state.units[1]), len(self.state.units[0]))
+        # print(len(self.state.units[1]), len(self.state.units[0]))
 
         self.obs = self._make_observation()
         self.obs_pre = self.obs
