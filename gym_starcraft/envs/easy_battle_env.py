@@ -8,7 +8,7 @@ import gym_starcraft.envs.starcraft_env as sc
 
 DISTANCE_FACTOR = 10
 ACTION_NUM = 3
-SCREEN_BOX = ((50,115),(120,155))  # (left_top,rigth_down)
+SCREEN_BOX = ((60,125),(100,140))  # (left_top,rigth_down)
 ATTACK_RANGE = 1000
 
 
@@ -393,7 +393,8 @@ class EasyBattleEnv(sc.StarCraftEnv):
             myself_info.append(unit.health)
         for unit in self.state.units[1]:
             enemy_info.append(unit.health)
-        print(sum(myself_info),sum(enemy_info))
+        # print(sum(myself_info),sum(enemy_info))
+        print(self.win)
 
         # print('myself_unit_dict:',self.myself_unit_dict)
         # print('enemy_unit_dict:',self.enemy_unit_dict)
