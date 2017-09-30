@@ -23,14 +23,12 @@ class Unit_State(object):
         self.attackCD = unit.groundCD
         self.velocityX = unit.velocityX        # speed
         self.velocityY = unit.velocityY
-        # the type is encoded to be one-hot, but is not considered temporally
         self.type = unit.type
         self.groundATK = unit.groundATK
         self.groundRange = unit.groundRange    # this can be inferred from training
         self.under_attack = unit.under_attack  # True or Flase
         self.attacking = unit.attacking        # True or False
         self.moving = unit.moving              # True or False
-        #TODO maintain a TOP-K list
         self.die = (unit.health <= 0)
         self.max_health = unit.max_health
         self.max_shield = unit.max_shield
@@ -47,20 +45,18 @@ class Unit_State(object):
         self.attackCD = unit.groundCD
         self.velocityX = unit.velocityX        # speed
         self.velocityY = unit.velocityY
-        # the type is encoded to be one-hot, but is not considered temporally
         self.groundATK = unit.groundATK
         self.groundRange = unit.groundRange    # this can be inferred from training
         self.under_attack = unit.under_attack  # True or Flase
         self.attacking = unit.attacking        # True or False
         self.moving = unit.moving              # True or False
-        #TODO maintain a TOP-K list
         self.die = (unit.health <= 0)
         self.pixel_size_x = unit.pixel_size_x
         self.pixel_size_y = unit.pixel_size_y
 
     def set_die(self):
         self.die = True
-        self.delta_health = self.health  # detal health = how much health it has before
+        self.delta_health = self.health        # if die, detal health = how much health it has before
         self.health = 0
         self.shield = 0
         
@@ -83,10 +79,7 @@ class EasyBattleEnv(sc.StarCraftEnv):
 
         self.myself_total_hp = 0   # current myself_units total hp
         self.enemy_total_hp = 0
-        self.win = False           # if win in this episode
-
-        # self.myself_ids = None     # list of myself_units' unit.id
-        # self.enemy_ids = None      # list of enemy_units' unit.id
+        self.win = False           # in this episode
 
         self.myself_unit_dict = None # map between myself unit.id and index of self.current_state['myself']
         self.enemy_unit_dict = None
@@ -110,27 +103,19 @@ class EasyBattleEnv(sc.StarCraftEnv):
 
     # needs to be modified
     def _observation_space(self):
-        # obs_low = [0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        # obs_high = [100.0, 100.0, 1.0, 1.0, 1.0, 50.0, 100.0, 100.0, 1.0, 1.0]
-        # return spaces.Box(np.array(obs_low), np.array(obs_high))
         print('return the current_state, have no space, you can extract the state you want')
         return spaces.Box(np.array([1.]),np.array([1.]))
 
     def _make_commands(self, actions):
-        # print('--------------------------')
-        # print(actions)
         cmds = []
         if self.state is None or actions is None:
             return cmds
 
-        # print(actions)
         assert (len(actions) == self.MYSELF_NUM)
         assert (len(actions[0]) == ACTION_NUM)
 
         for uid in range(self.MYSELF_NUM):
             unit = self.current_state['myself'][uid]
-            # print(unit.id)
-            # print(actions[uid])
 
             if not unit.die:   # if not die
                 if actions[uid][0]>0:
@@ -162,7 +147,6 @@ class EasyBattleEnv(sc.StarCraftEnv):
                     cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Move, -1, int(x_target), int(y_target)]
 
                 cmds.append(cmd)
-        # print(cmds)
 
         if len(cmds)==0:
             return [[tcc.noop]]
@@ -183,9 +167,9 @@ class EasyBattleEnv(sc.StarCraftEnv):
     def _compute_obs(self):
         return self.current_state
 
-
+    # compute the reward you want
     def _compute_reward(self):
-        # # total delta health
+        # # total delta health reward
         # reward = 0
         # hp_reward = float(self.myself_current_hp)/float(self.init_myself_total_hp)+(1.-float(self.enemy_current_hp)/self.init_enemy_total_hp)
         # win_reward = float(self.win)
@@ -201,12 +185,8 @@ class EasyBattleEnv(sc.StarCraftEnv):
         myself_detla_health = 10*float(myself_detla_health)/float(self.init_myself_total_hp)
         enemy_detla_health = 10*float(enemy_detla_health)/float(self.init_enemy_total_hp)
         health_reward = (enemy_detla_health - myself_detla_health)
-        # alive_reward = 
         win_reward = float(self.win) * float(sum(self.myself_alive_list))
-        # print(health_reward,alive_reward,win_reward)
         reward =  health_reward + win_reward
-
-
 
         return reward
     
@@ -226,9 +206,6 @@ class EasyBattleEnv(sc.StarCraftEnv):
         self.myself_alive_list = None
         self.enemy_alive_list = None
 
-        # self.myself_ids = None
-        # self.enemy_ids = None
-
         self.myself_unit_dict = None
         self.enemy_unit_dict = None
 
@@ -247,10 +224,8 @@ class EasyBattleEnv(sc.StarCraftEnv):
     def get_closest_enemy(self, unit, action):
         degree = action[1] * 180
         # TODO consider to change the target range.
-        distance = (action[2] + 1)*DISTANCE_FACTOR  # at most 2*DISTANCE_FACTOR
+        distance = (action[2] + 1)*DISTANCE_FACTOR
         tx, ty = self.get_position(unit.x,unit.y,degree, distance)
-        # TODO only consider those within the groundRange
-        # limit the distance between target and target unit
         target_id = self.compute_candidate(tx, ty)
         return target_id
 
@@ -265,15 +240,12 @@ class EasyBattleEnv(sc.StarCraftEnv):
         target_id = self.compute_candidate(tx,ty)
         return target_id
 
-    def compute_candidate(self, tx, ty):
+    def compute_candidate(self, tx, ty):   # find the most nearly enemy unit in the ATTACK_RANGE of target position
         target_id = None
-        # set it to be a big positive integer
         d = ATTACK_RANGE
-        # not consider the same situation
         for enemy_unit in self.state.units[1]:
             if self.enemy_alive_list[self.enemy_unit_dict[enemy_unit.id]] == 0:
                 continue
-            # TODO if the value is normalized, pay attention to change the value here.
             td = (enemy_unit.x - tx)**2 + (enemy_unit.y - ty)**2
             if td < d :
                 target_id = enemy_unit.id
