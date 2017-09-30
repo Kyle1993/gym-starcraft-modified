@@ -204,7 +204,7 @@ class EasyBattleEnv(sc.StarCraftEnv):
         # alive_reward = 
         win_reward = float(self.win) * float(sum(self.myself_alive_list))
         # print(health_reward,alive_reward,win_reward)
-        reward1 =  health_reward + win_reward
+        reward =  health_reward + win_reward
 
 
 
