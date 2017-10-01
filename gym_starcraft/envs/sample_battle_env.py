@@ -62,10 +62,10 @@ class Unit_State(object):
         
 
 
-class EasyBattleEnv(sc.StarCraftEnv):
+class SampleBattleEnv(sc.StarCraftEnv):
     def __init__(self, server_ip, server_port, myself_num, enemy_num, speed=0, frame_skip=0,
                  self_play=False, max_episode_steps=1000):
-        super(EasyBattleEnv, self).__init__(server_ip, server_port, speed,
+        super(SampleBattleEnv, self).__init__(server_ip, server_port, speed,
                                               frame_skip, self_play,
                                               max_episode_steps)
 
