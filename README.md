@@ -49,7 +49,7 @@ Gym StarCraft is an environment bundle for OpenAI Gym. It is based on [Facebook'
 
 3. Replace the map folder `$StarCraft\maps\BroodWar\micro` with the same name folder in my project  
 
-4. I have supplied some battle map in xxxx folder, the name like"3mv1z" means 3marines vs 1zergling, you can chose them by change the bwapi config file: `$STARCRAFT/bwapi-data/bwapi.ini`. You can even create new battle maps , __But please make sure the env parameter`myself_num` and `enemy_num` is equal to the content of your map(number of the units you control and number of units computer control)__
+4. I have supplied some battle map in `\micro` folder,you can chose them by change the bwapi config file: `$STARCRAFT/bwapi-data/bwapi.ini`. You can even create new battle maps , __But please make sure the env parameter`myself_num` and `enemy_num` is equal to the content of your map(number of the units you control and number of units computer control)__
 
 5. The env will return the basic observation data in each step, you should extract the state info you need in you own code.  
 the observation data look like this`{'myself':[M_unit0, M_unit1, ... , M_unitm], 'enemy':[E_unit0, E_unit1, ... ,E_unitn]}`  
