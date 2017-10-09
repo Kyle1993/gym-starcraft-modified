@@ -1,4 +1,4 @@
-from gym_starcraft.envs.sample_battle_env import SampleBattleEnv
+from gym_starcraft.envs.simple_battle_env import SimpleBattleEnv
 import numpy as np
 import argparse
 
@@ -16,7 +16,7 @@ parser.add_argument('--max-episode', type=int, default=1000)
 args = parser.parse_args()
 
 
-env = SampleBattleEnv(args.ip,args.port,args.myself_num,args.enemy_num,frame_skip=args.frame_skip)
+env = SimpleBattleEnv(args.ip,args.port,args.myself_num,args.enemy_num,frame_skip=args.frame_skip)
 
 for e in range(args.max_episode):
     state = env.reset()
