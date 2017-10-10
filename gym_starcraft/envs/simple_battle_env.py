@@ -167,14 +167,15 @@ class SimpleBattleEnv(sc.StarCraftEnv):
     def _compute_obs(self):
         return self.current_state
 
-    # compute the reward you want
+    # provide two options,total_reward or separate_reward, you can even calculate by yourself
     def _compute_reward(self):
-        # # total delta health reward
-        # reward = 0
-        # hp_reward = float(self.myself_current_hp)/float(self.init_myself_total_hp)+(1.-float(self.enemy_current_hp)/self.init_enemy_total_hp)
-        # win_reward = float(self.win)
-        # reward1 = hp_reward/2.+win_reward - 0.8 # -0.8:normalization 
 
+        reward = self.compute_reward_separately()
+        # reward = self.compute_reward_total()
+
+        return reward
+
+    def compute_reward_total(self):
         # delta health between step
         myself_detla_health = 0
         enemy_detla_health = 0
@@ -182,13 +183,43 @@ class SimpleBattleEnv(sc.StarCraftEnv):
             myself_detla_health += unit.delta_health
         for unit in self.current_state['enemy']:
             enemy_detla_health += unit.delta_health
-        myself_detla_health = 10*float(myself_detla_health)/float(self.init_myself_total_hp)
-        enemy_detla_health = 10*float(enemy_detla_health)/float(self.init_enemy_total_hp)
+        myself_detla_health = 10 * float(myself_detla_health) / float(self.init_myself_total_hp)
+        enemy_detla_health = 10 * float(enemy_detla_health) / float(self.init_enemy_total_hp)
         health_reward = (enemy_detla_health - myself_detla_health)
         win_reward = float(self.win) * float(sum(self.myself_alive_list))
-        reward =  health_reward + win_reward
+        reward = health_reward + win_reward
 
         return reward
+
+    def compute_reward_separately(self):
+        rewards = []
+        # rewards.append(self.compute_reward_total())
+
+        myself_detla_health = 0
+        enemy_detla_health = 0
+        for unit in self.current_state['enemy']:
+            enemy_detla_health += unit.delta_health
+        enemy_detla_health = float(enemy_detla_health) / float(self.init_enemy_total_hp)
+
+        for unit in self.current_state['myself']:
+            if unit.die:
+                rewards.append(0)
+            else:
+                myself_detla_health += unit.delta_health
+                unit_reward = self.ENEMY_NUM*enemy_detla_health-unit.delta_health/unit.max_health
+                rewards.append(10*unit_reward)
+        myself_detla_health = float(myself_detla_health) / float(self.init_myself_total_hp)
+
+        health_reward = 10 * (enemy_detla_health - myself_detla_health)
+        win_reward = float(self.win) * float(sum(self.myself_alive_list))
+        global_reward = health_reward + win_reward
+        rewards.insert(0,global_reward)
+
+        return rewards
+
+    # def compute_reward_topK(self):
+    #     for i in range(self.MYSELF_NUM):
+
     
     def reset_data(self):
         # skip the init state, there is no unit at the beginning of game
@@ -261,7 +292,7 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         if self.current_state is None:
             self.current_state = {}
 
-        # update the info about myself_unit(just covert it to Unit_State)
+        # update the info about myself_unit
         # if current_state is init_state
         if self.myself_unit_dict is None:
             self.myself_unit_dict = {}
@@ -288,7 +319,7 @@ class SimpleBattleEnv(sc.StarCraftEnv):
                     self.current_state['myself'][index].set_die()
 
 
-        # update the info about enemy_unit(just covert it to Unit_State)
+        # update the info about enemy_unit
         # if current_state is init_state
         if self.enemy_unit_dict is None:
             self.enemy_unit_dict = {}
@@ -365,8 +396,15 @@ class SimpleBattleEnv(sc.StarCraftEnv):
             myself_info.append(unit.health)
         for unit in self.state.units[1]:
             enemy_info.append(unit.health)
+        print(myself_info)
+        print(enemy_info)
+
+        alive_myselfinfo = []
+        for unit in self.current_state['myself']:
+            alive_myselfinfo.append(unit.max_health)
+        print(alive_myselfinfo)
         # print(sum(myself_info),sum(enemy_info))
-        print(self.win)
+        # print(self.win)
 
         # print('myself_unit_dict:',self.myself_unit_dict)
         # print('enemy_unit_dict:',self.enemy_unit_dict)
