@@ -70,9 +70,10 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         self.DISTANCE_FACTOR = hyperparameters['DISTANCE_FACTOR']
         self.ACTION_NUM = hyperparameters['NB_ACTION']
         self.SCREEN_BOX = hyperparameters['SCREEN_BOX']  # (left_top,rigth_down)
-        self.ATTACK_RANGE = hyperparameters['ATTACK_RANGE']
+        self.POSITION_RANGE = hyperparameters['POSITION_RANGE']
         self.DIE_REWARD = hyperparameters['DIE_REWARD']  # 500 means max_step
-        self.REWARD_EXPANSION = hyperparameters['REWARD_EXPANSION']
+        self.HEALTH_REWARD_WEIGHT = hyperparameters['HEALTH_REWARD_WEIGHT']
+        self.WIN_REWARD_WEIGHT = hyperparameters['WIN_REWARD_WEIGHT']
 
         self.myself_alive_list = None    # like [1,1,0,0,1]
         self.enemy_alive_list = None
@@ -124,10 +125,6 @@ class SimpleBattleEnv(sc.StarCraftEnv):
                     # attack
                     enemy_id =self.get_closest_enemy2(unit,actions[uid])  # get the colse enemy of target position
                     if enemy_id is None:
-                        # move to the position if enemy_id is None
-                        # degree = actions[uid][1] * 180
-                        # distance = actions[uid][2] * DISTANCE_FACTOR
-                        # x_target,y_target = self.get_position(unit.x,unit.y,degree,distance)  
                         x_ = actions[uid][1] * self.DISTANCE_FACTOR
                         y_ = actions[uid][2] * self.DISTANCE_FACTOR
                         x_target,y_target = self.get_position2(unit.x,unit.y,x_,y_)
@@ -136,6 +133,7 @@ class SimpleBattleEnv(sc.StarCraftEnv):
                         cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Move, -1, int(x_target), int(y_target)]
                     else:
                         cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Attack_Unit, enemy_id]
+                        # cmds.append(cmd)
                 else:
                     # move
                     # degree = actions[uid][1] * 180
@@ -172,7 +170,7 @@ class SimpleBattleEnv(sc.StarCraftEnv):
     # provide two options,total_reward or separate_reward, you can even calculate by yourself
     def _compute_reward(self):
 
-        reward = self.compute_reward_separately()
+        reward = self.compute_reward_separately2()
         # reward = self.compute_reward_total()
 
         return reward
@@ -185,8 +183,8 @@ class SimpleBattleEnv(sc.StarCraftEnv):
             myself_detla_health += unit.delta_health
         for unit in self.current_state['enemy']:
             enemy_detla_health += unit.delta_health
-        myself_detla_health = self.REWARD_EXPANSION * float(myself_detla_health) / float(self.init_myself_total_hp)
-        enemy_detla_health = self.REWARD_EXPANSION * float(enemy_detla_health) / float(self.init_enemy_total_hp)
+        myself_detla_health = self.HEALTH_REWARD_WEIGHT * float(myself_detla_health) / float(self.init_myself_total_hp)
+        enemy_detla_health = self.HEALTH_REWARD_WEIGHT * float(enemy_detla_health) / float(self.init_enemy_total_hp)
         health_reward = (enemy_detla_health - myself_detla_health)
         win_reward = float(self.win) * float(sum(self.myself_alive_list))
         reward = health_reward + win_reward
@@ -194,9 +192,6 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         return reward
 
     def compute_reward_separately(self):
-        # weight_die = -0.1
-        # weight_health = 10
-
 
         rewards = []
 
@@ -212,18 +207,38 @@ class SimpleBattleEnv(sc.StarCraftEnv):
             else:
                 myself_detla_health += unit.delta_health
                 unit_reward = self.ENEMY_NUM*enemy_detla_health-unit.delta_health/unit.max_health
-                rewards.append(self.REWARD_EXPANSION*unit_reward)
+                rewards.append(self.HEALTH_REWARD_WEIGHT*unit_reward)
         myself_detla_health = float(myself_detla_health) / float(self.init_myself_total_hp)
 
-        health_reward = self.REWARD_EXPANSION * (enemy_detla_health - myself_detla_health)
+        health_reward = self.HEALTH_REWARD_WEIGHT * (enemy_detla_health - myself_detla_health)
         win_reward = float(self.win) * float(sum(self.myself_alive_list))
         global_reward = health_reward + win_reward
         rewards.insert(0,global_reward)
 
         return rewards
 
-    # def compute_reward_topK(self):
-    #     for i in range(self.MYSELF_NUM):
+    def compute_reward_separately2(self):
+
+        rewards = []
+
+        myself_detla_health = 0
+        enemy_detla_health = 0
+        for unit in self.current_state['enemy']:
+            enemy_detla_health += unit.delta_health
+        enemy_detla_health = float(enemy_detla_health) / float(self.init_enemy_total_hp)
+
+        for unit in self.current_state['myself']:
+            if unit.die:
+                rewards.append(self.DIE_REWARD)
+            else:
+                myself_detla_health += unit.delta_health
+                health_reward = unit.attacking*max(1,float(self.ENEMY_NUM)/float(self.MYSELF_NUM))*enemy_detla_health # -unit.delta_health/unit.max_health
+                win_reward = float(self.win) * float(sum(self.myself_alive_list)) * float(self.ENEMY_NUM)/float(self.MYSELF_NUM)
+                rewards.append(self.HEALTH_REWARD_WEIGHT*health_reward+self.WIN_REWARD_WEIGHT*win_reward)
+
+        rewards.insert(0,sum(rewards)/self.MYSELF_NUM)
+
+        return rewards
 
     
     def reset_data(self):
@@ -276,12 +291,12 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         target_id = self.compute_candidate(tx,ty)
         return target_id
 
-    def compute_candidate(self, tx, ty):   # find the most nearly enemy unit in the ATTACK_RANGE of target position
+    def compute_candidate(self, tx, ty):   # find the most nearly enemy unit in the POSITION_RANGE of target position
         target_id = None
-        d = self.ATTACK_RANGE
+        d = self.POSITION_RANGE
         for enemy_unit in self.state.units[1]:
-            if self.enemy_alive_list[self.enemy_unit_dict[enemy_unit.id]] == 0:
-                continue
+            # if self.enemy_alive_list[self.enemy_unit_dict[enemy_unit.id]] == 0:
+            #     continue
             td = (enemy_unit.x - tx)**2 + (enemy_unit.y - ty)**2
             if td < d :
                 target_id = enemy_unit.id
