@@ -60,7 +60,7 @@ class Unit_State(object):
 
 
 class SimpleBattleEnv(sc.StarCraftEnv):
-    def __init__(self, server_ip, server_port,MYSELF_NUM,ENEMY_NUM,ACTION_NUM,DISTANCE_FACTOR=10,POSITION_RANGE=400,SCREEN_BOX=((40, 105), (150, 170)),
+    def __init__(self, server_ip, server_port,MYSELF_NUM,ENEMY_NUM,ACTION_NUM=3,DISTANCE_FACTOR=10,POSITION_RANGE=400,SCREEN_BOX=((40, 105), (150, 170)),
                  DIE_REWARD=2e-3,HEALTH_REWARD_WEIGHT=4,WIN_REWARD_WEIGHT=1,MY_HEALTH_WEIGHT=1,ENEMY_HEALTH_WEIGHT=4,FRAME_SKIP=2,MAX_STEP=700,speed=0, self_play=False):
         super(SimpleBattleEnv, self).__init__(server_ip, server_port, speed,FRAME_SKIP, self_play,MAX_STEP)
         self.mapname = None
