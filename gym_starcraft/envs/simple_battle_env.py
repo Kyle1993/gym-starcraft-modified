@@ -5,6 +5,7 @@ from gym import spaces
 import torchcraft.Constants as tcc
 # import gym_starcraft.utils as utils
 import gym_starcraft.envs.starcraft_env as sc
+import random
 
 
 def get_position(degree, distance, x1, y1):
@@ -35,6 +36,9 @@ class Unit_State(object):
         self.pixel_size_y = unit.pixel_size_y
         self.delta_health = 0
         self.delta_shield = 0
+        self.targetUnitId = unit.orders[0].targetId
+        self.targetX = unit.orders[0].targetX
+        self.targetY = unit.orders[0].targetY
 
     def update(self, unit):
         self.delta_health = self.health - unit.health
@@ -54,12 +58,18 @@ class Unit_State(object):
         self.die = (unit.health <= 0)
         self.pixel_size_x = unit.pixel_size_x
         self.pixel_size_y = unit.pixel_size_y
+        self.targetUnitId = unit.orders[0].targetId
+        self.targetX = unit.orders[0].targetX
+        self.targetY = unit.orders[0].targetY
 
     def set_die(self):
         self.die = True
         self.delta_health = self.health  # if die, detal health = how much health it has before
         self.health = 0
         self.shield = 0
+        self.targetUnitId = -1
+        self.targetX = -1
+        self.targetY = -1
 
 
 class SimpleBattleEnv(sc.StarCraftEnv):
@@ -107,10 +117,6 @@ class SimpleBattleEnv(sc.StarCraftEnv):
 
         self.win = False  # in this episode
 
-        # self.myself_unit_dict = None  # map between myself unit.id and index of self.current_state['myself']
-        # self.enemy_unit_dict = None
-
-
         print('------------- Enveriment config ---------------')
         print('ip:', server_ip)
         print('port:', server_port)
@@ -118,7 +124,7 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         print('ENEMY_NUM:', self.ENEMY_NUM)
 
     def _action_space(self):
-        # attack or move, move_degree, move_distance
+        # attack or move, x, y
         action_low = [-1.0, -1.0, -1.0]
         action_high = [1.0, 1.0, 1.0]
         return spaces.Box(np.array(action_low), np.array(action_high))
@@ -147,20 +153,20 @@ class SimpleBattleEnv(sc.StarCraftEnv):
                     if enemy_id is not None:
                         cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Attack_Unit, enemy_id]
                     else:
-                        # don't do any thing
-                        cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Move, -1, unit.x,
-                               unit.y]
+                        # # don't do any thing
+                        # cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Move, -1, unit.x,
+                        #        unit.y]
 
                         # # attack around
                         # continue
 
                         # move to target position
-                        # x_target, y_target = unit.x + actions[index][1] * self.DISTANCE_FACTOR, unit.y + actions[index][
-                        #     2] * self.DISTANCE_FACTOR
-                        # x_target, y_target = max(x_target, self.SCREEN_BOX[0][0]), max(y_target, self.SCREEN_BOX[0][1])
-                        # x_target, y_target = min(x_target, self.SCREEN_BOX[1][0]), min(y_target, self.SCREEN_BOX[1][1])
-                        # cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Move, -1, int(x_target),
-                        #        int(y_target)]
+                        x_target, y_target = unit.x + actions[index][1] * self.DISTANCE_FACTOR, unit.y + actions[index][
+                            2] * self.DISTANCE_FACTOR
+                        x_target, y_target = max(x_target, self.SCREEN_BOX[0][0]), max(y_target, self.SCREEN_BOX[0][1])
+                        x_target, y_target = min(x_target, self.SCREEN_BOX[1][0]), min(y_target, self.SCREEN_BOX[1][1])
+                        cmd = [tcc.command_unit_protected, unit.id, tcc.unitcommandtypes.Move, -1, int(x_target),
+                               int(y_target)]
                 else:
                     # move
                     # degree = actions[index][1] * 180
@@ -184,8 +190,6 @@ class SimpleBattleEnv(sc.StarCraftEnv):
 
         self.update_self()  # mainly in self.current_state, which is main state, we can extract all info from it
         obs = self._compute_obs()  # return the obs you want
-
-        # self.print_attr()
 
         return obs
 
@@ -221,19 +225,29 @@ class SimpleBattleEnv(sc.StarCraftEnv):
 
 
     def compute_reward_separately(self):
-
         rewards = {}
         alive = 0
         for ua in self.myself_alive.values():
             alive += ua
+        enemy_detal_hp_reward = {}
+        enemy_detal_shield_reward = {}
+        for uid,unit in self.current_state[1].items():
+            enemy_detal_hp_reward[uid] = unit.max_health-unit.health
+            enemy_detal_shield_reward[uid] = unit.max_shield-unit.shield
 
         for uid,unit in self.current_state[0].items():
             if unit.die:
                 rewards[uid] = self.DIE_REWARD
             else:
-                health_reward = self.ENEMY_HEALTH_WEIGHT*(self.enemy_detal_hp+self.enemy_detal_shield) - self.MY_HEALTH_WEIGHT*(unit.delta_health+unit.delta_shield)
+                nearly_enemy_detal_hp_reward,nearly_enemy_detal_shield_reward = 0,0
+                if unit.targetUnitId >=0:
+                    nearly_enemy_detal_hp_reward = enemy_detal_hp_reward[unit.targetUnitId]
+                    nearly_enemy_detal_shield_reward = enemy_detal_shield_reward[unit.targetUnitId]
+
+                health_reward = self.ENEMY_HEALTH_WEIGHT*(nearly_enemy_detal_hp_reward+nearly_enemy_detal_shield_reward) - self.MY_HEALTH_WEIGHT*(unit.delta_health+unit.delta_shield)
                 win_reward = self.win * float(alive)
-                range_reward = -1*self.DIE_REWARD*self.in_saferange(unit)
+                range_reward = -0.5*self.DIE_REWARD*self.range_reward(unit,low=10,high=unit.groundRange)
+
                 rewards[uid] = self.HEALTH_REWARD_WEIGHT * health_reward + self.WIN_REWARD_WEIGHT * win_reward + range_reward
 
         return rewards
@@ -294,6 +308,24 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         target_id = self.compute_candidate(tx, ty)
         return target_id
 
+    def nearly_enemy_id(self,unit,range=10):
+        target_x,target_y = unit.x,unit.y
+        ids = []
+        for uid, unit in self.current_state[1].items():
+            dx,dy = unit.x-target_x,unit.y-target_y
+            if math.sqrt(dx**2+dy**2)<=range:
+                ids.append(uid)
+        return ids
+
+    def nearly_myself_id(self,unit,range=10):
+        target_x,target_y = unit.x,unit.y
+        ids = [unit.id]
+        for uid, unit in self.current_state[0].items():
+            dx,dy = unit.x-target_x,unit.y-target_y
+            if math.sqrt(dx**2+dy**2)<=range:
+                ids.append(uid)
+        return ids
+
 
     def compute_candidate(self, tx, ty):  # find the most nearly enemy unit in the POSITION_RANGE of target position
         target_id = None
@@ -305,14 +337,19 @@ class SimpleBattleEnv(sc.StarCraftEnv):
                 d = td
         return target_id
 
-    def in_saferange(self,myself_unit,saferange=10):
-        x,y = myself_unit.x,myself_unit.y
-        min_d = saferange
+    def range_reward(self,unit,low=0,high=20):
+        # high = unit.groundRange
+        x,y = unit.x,unit.y
+        min_d = 1000
         for uid,enemy in self.current_state[1].items():
             d = math.sqrt((x-enemy.x)**2 + (y-enemy.y)**2)
             if d < min_d:
                 min_d = d
-        return 1-min_d/saferange
+        if min_d>=low and min_d<=high:
+            return 1
+        else:
+            return -1
+
 
     def update_self(self):
 
@@ -325,6 +362,8 @@ class SimpleBattleEnv(sc.StarCraftEnv):
 
         myslef_alive = []
         enemy_alive = []
+        # print(self.state.units[0][0].groundRange)
+
         for unit in self.state.units[0]:
             myslef_alive.append(unit.id)
             self.current_state[0][unit.id].update(unit)
@@ -378,25 +417,7 @@ class SimpleBattleEnv(sc.StarCraftEnv):
             return True
         return False
 
-    # print info for debug
-    def print_attr(self):
-
-        myself_info = []
-        enemy_info = []
-        for unit in self.state.units[0]:
-            myself_info.append(unit.health)
-        for unit in self.state.units[1]:
-            enemy_info.append(unit.health)
-        print(myself_info)
-        print(enemy_info)
-
-        alive_myselfinfo = []
-        for unit in self.current_state[0].values():
-            alive_myselfinfo.append(unit.max_health)
-        print(alive_myselfinfo)
-
     def getMapName(self):
-
         return self.mapname
 
 
