@@ -117,6 +117,10 @@ class SimpleBattleEnv(sc.StarCraftEnv):
 
         self.win = False  # in this episode
 
+        # self.myself_unit_dict = None  # map between myself unit.id and index of self.current_state['myself']
+        # self.enemy_unit_dict = None
+
+
         print('------------- Enveriment config ---------------')
         print('ip:', server_ip)
         print('port:', server_port)
@@ -224,31 +228,88 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         return reward
 
 
+    # def compute_reward_separately(self):
+    #
+    #     rewards = {}
+    #     alive = 0
+    #     for ua in self.myself_alive.values():
+    #         alive += ua
+    #     enemy_detal_hp = {}
+    #     enemy_detal_shield = {}
+    #     for uid,unit in self.current_state[1].items():
+    #         enemy_detal_hp[uid] = (1.3**max(0,unit.delta_health) -1)
+    #         enemy_detal_shield[uid] = (1.3**max(0,unit.delta_shield) -1)
+    #
+    #     for uid,unit in self.current_state[0].items():
+    #         if unit.die:
+    #             rewards[uid] = self.DIE_REWARD
+    #         else:
+    #             nearly_enemy_detal_hp,nearly_enemy_detal_shield = 0,0
+    #             nearly_enemy_id = self.nearly_enemy_id(unit,500)
+    #             for id in nearly_enemy_id:
+    #                 nearly_enemy_detal_hp += enemy_detal_hp[id] #enemy_detal_hp[id] #max(0,self.current_state[1][id].delta_health)
+    #                 nearly_enemy_detal_shield += enemy_detal_shield[id] #enemy_detal_shield[id] #max(0,self.current_state[1][id].delta_shield)
+    #             if len(nearly_enemy_id) != 0:
+    #                 nearly_enemy_detal_hp = nearly_enemy_detal_hp/len(nearly_enemy_id)
+    #                 nearly_enemy_detal_shield = nearly_enemy_detal_shield/len(nearly_enemy_id)
+    #
+    #             # nearly_myself_detal_hp,nearly_myself_detal_shield = 0,0
+    #             # nearly_myself_id = self.nearly_myself_id(unit,15)
+    #             # for id in nearly_myself_id:
+    #             #     nearly_myself_detal_hp += max(0,self.current_state[0][id].delta_health)
+    #             #     nearly_myself_detal_shield += max(0,self.current_state[0][id].delta_shield)
+    #             # nearly_myself_detal_hp = nearly_myself_detal_hp/len(nearly_myself_id)
+    #             # nearly_myself_detal_shield = nearly_myself_detal_shield/len(nearly_myself_id)
+    #
+    #             # if unit.targetUnitId >=0:
+    #             #     nearly_enemy_detal_hp = enemy_detal_hp[unit.targetUnitId]
+    #             #     nearly_enemy_detal_shield = enemy_detal_shield[unit.targetUnitId]
+    #
+    #             health_reward = self.ENEMY_HEALTH_WEIGHT*(nearly_enemy_detal_hp+nearly_enemy_detal_shield) - self.MY_HEALTH_WEIGHT*(unit.delta_health+unit.delta_shield)
+    #
+    #             win_reward = self.win * float(alive)
+    #             range_reward = -0.5*self.DIE_REWARD*self.range_reward(unit,low=10,high=unit.groundRange)
+    #
+    #             rewards[uid] = self.HEALTH_REWARD_WEIGHT * health_reward + self.WIN_REWARD_WEIGHT * win_reward + range_reward
+    #
+    #     return rewards
+
     def compute_reward_separately(self):
         rewards = {}
         alive = 0
         for ua in self.myself_alive.values():
             alive += ua
-        enemy_detal_hp_reward = {}
-        enemy_detal_shield_reward = {}
-        for uid,unit in self.current_state[1].items():
-            enemy_detal_hp_reward[uid] = unit.max_health-unit.health
-            enemy_detal_shield_reward[uid] = unit.max_shield-unit.shield
-
+        # print('===========================')
+        # for id,e in self.current_state[1].items():
+        #     print(id,e.delta_shield,e.delta_shield)
         for uid,unit in self.current_state[0].items():
             if unit.die:
                 rewards[uid] = self.DIE_REWARD
             else:
-                nearly_enemy_detal_hp_reward,nearly_enemy_detal_shield_reward = 0,0
-                if unit.targetUnitId >=0:
-                    nearly_enemy_detal_hp_reward = enemy_detal_hp_reward[unit.targetUnitId]
-                    nearly_enemy_detal_shield_reward = enemy_detal_shield_reward[unit.targetUnitId]
+                nearly_enemy_id = self.nearly_enemy_id(unit,unit.groundRange)
+                enemy_hp_reward,enemy_shield_reward = 0,0
+                for id in nearly_enemy_id:
+                    enemy = self.current_state[1][id]
+                    enemy_hp_reward += max(0,enemy.delta_health)
+                    enemy_shield_reward += max(0,enemy.delta_shield)
+                if len(nearly_enemy_id)!=0:
+                    enemy_hp_reward = enemy_hp_reward/len(nearly_enemy_id)
+                    enemy_shield_reward = enemy_shield_reward/len(nearly_enemy_id)
+                health_reward = self.ENEMY_HEALTH_WEIGHT*(enemy_hp_reward+enemy_shield_reward) - self.MY_HEALTH_WEIGHT*(max(0,unit.delta_health)+max(0,unit.delta_shield))
 
-                health_reward = self.ENEMY_HEALTH_WEIGHT*(nearly_enemy_detal_hp_reward+nearly_enemy_detal_shield_reward) - self.MY_HEALTH_WEIGHT*(unit.delta_health+unit.delta_shield)
+                target_hp_reward,target_shield_reward = 0,0
+                if unit.targetUnitId != -1:
+                    enemy = self.current_state[1][unit.targetUnitId]
+                    if enemy.max_health > 0:
+                        target_hp_reward = (enemy.max_health - enemy.health) / enemy.max_health
+                    if enemy.max_shield > 0:
+                        target_shield_reward = (enemy.max_shield - enemy.shield) / enemy.max_shield
+                focus_reward = 2*(target_hp_reward+target_shield_reward)
+
                 win_reward = self.win * float(alive)
                 range_reward = -0.5*self.DIE_REWARD*self.range_reward(unit,low=10,high=unit.groundRange)
 
-                rewards[uid] = self.HEALTH_REWARD_WEIGHT * health_reward + self.WIN_REWARD_WEIGHT * win_reward + range_reward
+                rewards[uid] = self.HEALTH_REWARD_WEIGHT * health_reward + self.WIN_REWARD_WEIGHT * win_reward + range_reward + focus_reward
 
         return rewards
 
@@ -281,6 +342,8 @@ class SimpleBattleEnv(sc.StarCraftEnv):
             self.myself_id.append(unit.id)
             self.myself_alive[unit.id] = 1
             self.current_state[0][unit.id] = Unit_State(unit)
+            self.current_state[0][unit.id].max_health = unit.health
+            self.current_state[0][unit.id].max_shield = unit.shield
             self.myself_total_hp += unit.health
             self.myself_total_shield += unit.shield
 
@@ -288,6 +351,8 @@ class SimpleBattleEnv(sc.StarCraftEnv):
             self.enemy_id.append(unit.id)
             self.enemy_alive[unit.id] = 1
             self.current_state[1][unit.id] = Unit_State(unit)
+            self.current_state[1][unit.id].max_health = unit.health
+            self.current_state[1][unit.id].max_shield = unit.shield
             self.enemy_total_hp += unit.health
             self.enemy_total_shield += unit.shield
 
@@ -312,18 +377,20 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         target_x,target_y = unit.x,unit.y
         ids = []
         for uid, unit in self.current_state[1].items():
-            dx,dy = unit.x-target_x,unit.y-target_y
-            if math.sqrt(dx**2+dy**2)<=range:
-                ids.append(uid)
+            if not unit.die:
+                dx,dy = unit.x-target_x,unit.y-target_y
+                if math.sqrt(dx**2+dy**2)<=range:
+                    ids.append(uid)
         return ids
 
     def nearly_myself_id(self,unit,range=10):
         target_x,target_y = unit.x,unit.y
-        ids = [unit.id]
+        ids = []
         for uid, unit in self.current_state[0].items():
-            dx,dy = unit.x-target_x,unit.y-target_y
-            if math.sqrt(dx**2+dy**2)<=range:
-                ids.append(uid)
+            if not unit.die:
+                dx,dy = unit.x-target_x,unit.y-target_y
+                if math.sqrt(dx**2+dy**2)<=range:
+                    ids.append(uid)
         return ids
 
 
@@ -362,7 +429,6 @@ class SimpleBattleEnv(sc.StarCraftEnv):
 
         myslef_alive = []
         enemy_alive = []
-        # print(self.state.units[0][0].groundRange)
 
         for unit in self.state.units[0]:
             myslef_alive.append(unit.id)
@@ -394,7 +460,6 @@ class SimpleBattleEnv(sc.StarCraftEnv):
         self.myself_total_shield = myself_current_shield
         self.enemy_total_hp = enemy_current_hp
         self.enemy_total_shield = enemy_current_shield
-
 
         assert len(self.current_state[0]) == self.MYSELF_NUM
         assert len(self.current_state[1]) == self.ENEMY_NUM
